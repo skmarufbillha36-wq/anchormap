@@ -1,0 +1,2 @@
+# Public assets (favicons, og-images, etc.) go here.
+# This directory must exist for the Docker build to succeed.

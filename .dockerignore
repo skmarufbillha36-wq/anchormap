@@ -1,0 +1,39 @@
+node_modules
+.next
+dist
+build
+
+# Environment files — NEVER in Docker images
+.env
+.env.*
+!.env.example
+
+# Git
+.git
+.gitignore
+
+# Logs
+*.log
+
+# OSM data files (large binary)
+data/*.pbf
+data/*.osm
+data/*.pbf.bz2
+
+# Docs (not needed in container)
+docs/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# TypeScript build info
+*.tsbuildinfo

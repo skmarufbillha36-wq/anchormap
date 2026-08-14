@@ -1,0 +1,90 @@
+name: ankara-gis
+
+services:
+  # ─── PostgreSQL 17 + PostGIS 3.5 ─────────────────────────────
+  db:
+    image: postgis/postgis:17-3.5-alpine
+    container_name: ankara_gis_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ankara_gis
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ankara_gis"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - ankara_net
+
+  # ─── Express.js API ───────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: ankara-gis-api:latest
+    container_name: ankara_gis_api
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env.docker
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/api/v1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - ankara_net
+
+  # ─── Next.js Frontend ─────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:5000/api/v1
+    image: ankara-gis-web:latest
+    container_name: ankara_gis_web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - ankara_net
+
+  # ─── Database Seeder (run with: make seed) ────────────────────
+  seed:
+    profiles: ["seed"]
+    build:
+      context: .
+      dockerfile: packages/database/Dockerfile.seed
+    container_name: ankara_gis_seed
+    env_file:
+      - .env.docker
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - ankara_net
+
+networks:
+  ankara_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local

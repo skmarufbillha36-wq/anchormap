@@ -1,0 +1,48 @@
+# ============================================================
+# Render.yaml — AnchorMap GIS API
+# Infrastructure-as-Code for Render.com deployment
+# Deploy: Connect this repo in Render → "New Web Service" →
+#         select "Use render.yaml" option.
+# ============================================================
+
+services:
+  - type: web
+    name: anchormap-api
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon   # Change to Frankfurt (eu-west) if you prefer EU
+
+    # Health check — Render polls this before marking healthy
+    healthCheckPath: /api/v1/health
+
+    # All sensitive vars must be set manually in Render dashboard
+    # (Dashboard → Environment → Add Environment Variable)
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+
+      # ── Set these manually in the Render dashboard (never commit values) ──
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 24h
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false

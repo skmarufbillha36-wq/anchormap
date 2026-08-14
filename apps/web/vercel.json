@@ -1,0 +1,6 @@
+{
+  "framework": "nextjs",
+  "ignoreCommand": "exit 1",
+  "installCommand": "cd ../.. && npm install --legacy-peer-deps",
+  "buildCommand": "npm run build"
+}

@@ -1,0 +1,233 @@
+// ============================================================
+// Prisma Schema — AnchorMap GIS
+// PostgreSQL 17 + PostGIS 3.6
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users ───────────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email         String   @unique
+  name          String
+  avatarUrl     String?  @map("avatar_url")
+  passwordHash  String?  @map("password_hash")
+  role          String   @default("USER")
+  provider      String   @default("email")
+  emailVerified Boolean  @default(false) @map("email_verified")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  reviews    Review[]
+  favorites  Favorite[]
+  reports    Report[]   @relation("ReporterRelation")
+  resolved   Report[]   @relation("ResolverRelation")
+  suggestions    Suggestion[] @relation("SuggesterRelation")
+  reviewed       Suggestion[] @relation("ReviewerRelation")
+  photos     Photo[]
+  locations  Location[] @relation("LocationCreator")
+  auditLogs  AuditLog[]
+
+  @@map("users")
+}
+
+// ─── Categories ───────────────────────────────────────────────
+
+model Category {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  nameTr    String?  @map("name_tr")
+  slug      String   @unique
+  icon      String?
+  color     String?
+  parentId  String?  @map("parent_id") @db.Uuid
+  sortOrder Int      @default(0) @map("sort_order") @db.SmallInt
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Self-relation
+  parent   Category?  @relation("CategoryParent", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryParent")
+
+  locations Location[]
+
+  @@map("categories")
+}
+
+// ─── Locations ─────────────────────────────────────────────────
+
+model Location {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  osmId       BigInt?  @unique @map("osm_id")
+  osmType     String?  @map("osm_type")
+  slug        String   @unique
+  name        String
+  nameTr      String?  @map("name_tr")
+  categoryId  String   @map("category_id") @db.Uuid
+  subcategory String?
+
+  // Geographic — geom column is managed via raw SQL + PostGIS
+  // Prisma stores it as Unsupported; we use $queryRaw for spatial ops
+  geom        Unsupported("geometry(Point,4326)")?
+  district    String?
+  address     String?
+
+  description   String?
+  descriptionTr String? @map("description_tr")
+
+  phone     String?
+  website   String?
+  email     String?
+  instagram String?
+  operator  String?
+
+  addrPostcode  String? @map("addr_postcode")
+  hoursJson     Json?   @map("hours_json")
+  tags          String[]
+  accessibility String?
+
+  status    String   @default("pending")
+  source    String   @default("osm")
+
+  avgRating   Decimal? @map("avg_rating") @db.Decimal(3, 2)
+  reviewCount Int      @default(0) @map("review_count")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  createdBy String?  @map("created_by") @db.Uuid
+
+  // Relations
+  category  Category   @relation(fields: [categoryId], references: [id])
+  creator   User?      @relation("LocationCreator", fields: [createdBy], references: [id])
+  photos    Photo[]
+  reviews   Review[]
+  favorites Favorite[]
+  reports   Report[]
+  suggestions Suggestion[]
+
+  @@map("locations")
+}
+
+// ─── Photos ───────────────────────────────────────────────────
+
+model Photo {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  locationId String   @map("location_id") @db.Uuid
+  url        String
+  publicId   String   @map("public_id")
+  caption    String?
+  captionTr  String?  @map("caption_tr")
+  isPrimary  Boolean  @default(false) @map("is_primary")
+  uploadedBy String?  @map("uploaded_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  uploader User?    @relation(fields: [uploadedBy], references: [id])
+
+  @@map("photos")
+}
+
+// ─── Reviews ──────────────────────────────────────────────────
+
+model Review {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  locationId String   @map("location_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  rating     Int      @db.SmallInt
+  content    String?
+  status     String   @default("published")
+  flagCount  Int      @default(0) @map("flag_count")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@unique([locationId, userId])
+  @@map("reviews")
+}
+
+// ─── Favorites ────────────────────────────────────────────────
+
+model Favorite {
+  userId     String   @map("user_id") @db.Uuid
+  locationId String   @map("location_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@id([userId, locationId])
+  @@map("favorites")
+}
+
+// ─── Reports ──────────────────────────────────────────────────
+
+model Report {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  locationId  String    @map("location_id") @db.Uuid
+  reporterId  String?   @map("reporter_id") @db.Uuid
+  type        String?
+  description String?
+  status      String    @default("open")
+  resolvedBy  String?   @map("resolved_by") @db.Uuid
+  resolvedAt  DateTime? @map("resolved_at") @db.Timestamptz()
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  reporter User?    @relation("ReporterRelation", fields: [reporterId], references: [id])
+  resolver User?    @relation("ResolverRelation", fields: [resolvedBy], references: [id])
+
+  @@map("reports")
+}
+
+// ─── Suggestions ──────────────────────────────────────────────
+
+model Suggestion {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  suggestedBy String?   @map("suggested_by") @db.Uuid
+  name        String
+  nameTr      String?   @map("name_tr")
+  categoryId  String?   @map("category_id") @db.Uuid
+  lat         Decimal   @db.Decimal(10, 7)
+  lng         Decimal   @db.Decimal(10, 7)
+  address     String?
+  description String?
+  status      String    @default("pending")
+  reviewedBy  String?   @map("reviewed_by") @db.Uuid
+  reviewedAt  DateTime? @map("reviewed_at") @db.Timestamptz()
+  locationId  String?   @map("location_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  suggester User?     @relation("SuggesterRelation", fields: [suggestedBy], references: [id])
+  reviewer  User?     @relation("ReviewerRelation", fields: [reviewedBy], references: [id])
+  location  Location? @relation(fields: [locationId], references: [id])
+
+  @@map("suggestions")
+}
+
+// ─── Audit Log ────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id") @db.Uuid
+  changesJson Json?   @map("changes_json")
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("audit_log")
+}
